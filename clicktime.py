@@ -150,20 +150,35 @@ class Resolver(object):
         self.resolvers = resolvers
         self.cache = {}
 
+    def nested_set(self, dic, value, *keys):
+        for key in keys[:-1]:
+            dic = dic.setdefault(key, {})
+        dic[keys[-1]] = value
+
+    def nested_get(self, dic, *keys):
+        for key in keys[:-1]:
+            dic = dic.get(key, {})
+        return dic.get(keys[-1])
+
     def _resolve(self, ct, resolver, d):
-        identifier = d.get(resolver, None)
-        if identifier is None:
-            return d
-        
-        endpoint = resolver[0:-2]
-        if (endpoint, identifier) in self.cache:
-            d[endpoint] = self.cache[ (endpoint, identifier) ]
+        resolver_fields = tuple( resolver.split(".") )
+
+        identifier = self.nested_get(d, *resolver_fields)
+
+        endpoint = resolver_fields[-1][0:-2]
+        keys = resolver_fields[0:-1] + (endpoint, )
+
+        cache_key = (keys, identifier)
+        if cache_key in self.cache:
+            data = self.cache[ cache_key ]
         else:
             value, _, _ = self.ct.connection.get(
                 f"{endpoint}s/{identifier}",
             )
-            d[endpoint] = value.get("data")
-            self.cache[ (endpoint, identifier) ] = value.get("data")
+            data = value.get("data")
+            self.cache[ cache_key ] = data
+
+        self.nested_set(d, data, *keys)
             
         return d
 
