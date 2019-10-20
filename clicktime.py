@@ -474,6 +474,34 @@ class UsersEndpoint(ScrollableEndpoint):
             self.path = []
         return super().params(**params)
 
+class TimeOffEndpoint(ScrollableEndpoint):
+    def __init__(self, ct):
+        super().__init__(
+            ct,
+            "TimeOff",
+            (
+                "ID",
+                "TimeOffTypeID",
+                "UserID",
+                "FromDate",
+                "ToDate",
+                "Date",
+                "limit",
+                "offset"
+            )
+        )
+
+    def custom_fields(self):
+        return CustomFieldsEndpoint(self.ct, "Users")
+
+    def params(self, **params):
+        timeOffID = params.pop("timeOffID", None)
+        if timeOffID is not None:
+            self.path = [ timeOffID ]
+        else:
+            self.path = []
+        return super().params(**params)
+
 ##############################################################################
 # ClickTime
 ##############################################################################
@@ -536,6 +564,9 @@ class ClickTime(object):
 
     def users(self):
         return UsersEndpoint(self)
+
+    def timeoff(self):
+        return TimeOffEndpoint(self)
 
 ##############################################################################
 if __name__ == "__main__":
