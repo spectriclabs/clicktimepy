@@ -300,7 +300,8 @@ class ScrollableEndpoint(Endpoint):
 
     def scroll(self, **params):
         for d in self.ct.connection.scroll(self.url, *self.path, **self.parameters):
-            self.resolver.resolve_all(self.ct, d)
+            if self.resolver:
+                self.resolver.resolve_all(self.ct, d)
             yield d
 
 
