@@ -442,6 +442,23 @@ class ReportsEndpoint(ScrollableEndpoint):
             )
         )
 
+
+class TimeEntriesEndpoint(ScrollableEndpoint):
+    def __init__(self, ct):
+        super().__init__(
+            ct,
+            "TimeEntries",
+            (
+                "JobID",
+                "UserID",
+                "TaskID",
+                "StartDate",
+                "EndDate",
+                "limit",
+                "offset"
+            )
+        )
+
 class UsersEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
         super().__init__(
@@ -562,6 +579,9 @@ class ClickTime(object):
 
     def reports(self):
         return ReportsEndpoint(self)
+
+    def time_entries(self):
+        return TimeEntriesEndpoint(self)
 
     def users(self):
         return UsersEndpoint(self)
