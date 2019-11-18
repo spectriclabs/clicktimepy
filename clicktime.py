@@ -438,7 +438,8 @@ class ReportsEndpoint(ScrollableEndpoint):
                 "EndDate",
                 "IsBillable",
                 "limit",
-                "offset"
+                "offset",
+                "verbose"
             )
         )
 
