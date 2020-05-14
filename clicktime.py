@@ -26,20 +26,23 @@ import urllib.parse
 import logging
 import contextlib
 
+
 class Connection(object):
     """
     A basic ClickTime connection
     """
-        
+
     SERVER = "api.clicktime.com"
     URL_BASE = "v2"
 
     def __init__(self, username=None, password=None, token=None):
         if username and password:
-            auth = base64.encodestring(f"{username}:{password}".encode("utf-8")).strip() # remove the extra newline
-            self.__headers = {"Authorization" : "Basic %s" % auth.decode("utf-8")}
+            auth = base64.encodestring(
+                f"{username}:{password}".encode("utf-8")
+            ).strip()  # remove the extra newline
+            self.__headers = {"Authorization": "Basic %s" % auth.decode("utf-8")}
         elif token:
-            self.__headers = {"Authorization" : "Token %s" % token}
+            self.__headers = {"Authorization": "Token %s" % token}
         else:
             raise AttributeError("either username/password or token must be provided")
 
@@ -51,7 +54,7 @@ class Connection(object):
         if self.__headers is not None:
             headers = copy.copy(self.__headers)
         else:
-            headers =  {}
+            headers = {}
         headers["Content-Type"] = "application/json"
 
         # Create the connection
@@ -65,7 +68,7 @@ class Connection(object):
                 path = "/" + "/".join(path)
             else:
                 path = ""
-            full_url =  f"/{self.URL_BASE}/{url}{path}?{q}"
+            full_url = f"/{self.URL_BASE}/{url}{path}?{q}"
             logging.debug(f"GET {full_url}")
 
             # Make the request
@@ -80,12 +83,12 @@ class Connection(object):
 
         # Return everything
         return data, resp.status, resp.reason
-    
+
     def scroll(self, url, *path, **params):
         """
         Helper function to automatically scroll all documents
         """
-        if 'offset' in params:
+        if "offset" in params:
             raise AttributeError("offset cannot be used with scroll_reports")
 
         while True:
@@ -96,7 +99,7 @@ class Connection(object):
             if not result.get("data"):
                 logging.debug("data is empty")
                 break
-                            
+
             count = result.get("page", {}).get("count")
             limit = result.get("page", {}).get("limit")
             _next = result.get("page", {}).get("links", {}).get("next")
@@ -111,8 +114,8 @@ class Connection(object):
                 break
             if count == 0:
                 break
-            
-            params['offset'] = params.get('offset', 0) + limit
+
+            params["offset"] = params.get("offset", 0) + limit
 
     def post(self, url, data=None):
         """
@@ -121,15 +124,17 @@ class Connection(object):
         if self.headers is not None:
             headers = copy.copy(self.headers)
         else:
-            headers =  {}
+            headers = {}
         headers["content-type"] = "application/json; charset=utf-8"
         connection = http.client.HTTPSConnection(self.SERVER)
-        connection.request("POST", "%s/%s" % (self.URL_BASE, url), headers=headers, body=data)
+        connection.request(
+            "POST", "%s/%s" % (self.URL_BASE, url), headers=headers, body=data
+        )
         resp = connection.getresponse()
         data = resp.read()
         connection.close()
         return data, resp.status, resp.reason
-        
+
     def _parse(self, json_str, default=None):
         try:
             return json.loads(json_str)
@@ -137,7 +142,9 @@ class Connection(object):
             logging.error("Error parsing JSON '%s'", json_str)
             return default
 
+
 ##############################################################################
+
 
 class Resolver(object):
     """
@@ -145,6 +152,7 @@ class Resolver(object):
     a look up using the endpoint "Jobs/{identifer}" and placed
     the result into "Job"
     """
+
     def __init__(self, ct, *resolvers):
         self.ct = ct
         self.resolvers = resolvers
@@ -161,25 +169,23 @@ class Resolver(object):
         return dic.get(keys[-1])
 
     def _resolve(self, ct, resolver, d):
-        resolver_fields = tuple( resolver.split(".") )
+        resolver_fields = tuple(resolver.split("."))
 
         identifier = self.nested_get(d, *resolver_fields)
 
         endpoint = resolver_fields[-1][0:-2]
-        keys = resolver_fields[0:-1] + (endpoint, )
+        keys = resolver_fields[0:-1] + (endpoint,)
 
         cache_key = (keys, identifier)
         if cache_key in self.cache:
-            data = self.cache[ cache_key ]
+            data = self.cache[cache_key]
         else:
-            value, _, _ = self.ct.connection.get(
-                f"{endpoint}s/{identifier}",
-            )
+            value, _, _ = self.ct.connection.get(f"{endpoint}s/{identifier}")
             data = value.get("data")
-            self.cache[ cache_key ] = data
+            self.cache[cache_key] = data
 
         self.nested_set(d, data, *keys)
-            
+
         return d
 
     def resolve_all(self, ct, d):
@@ -188,6 +194,7 @@ class Resolver(object):
 
 
 ##############################################################################
+
 
 class Result(object):
     """
@@ -198,10 +205,11 @@ class Result(object):
         """
         Internal result iterator
         """
+
         def __init__(self, data):
             self.data = data
             self._index = 0
-        
+
         def __next__(self):
             if self._index < len(self.data):
                 v = self.data[self._index]
@@ -215,11 +223,7 @@ class Result(object):
         self.reason = reason
 
     def resolve(self, *resolvers):
-        return Resolver(
-            self.ct,
-            self,
-            *resolvers
-        )
+        return Resolver(self.ct, self, *resolvers)
 
     @property
     def isiterable(self):
@@ -237,10 +241,10 @@ class Result(object):
         if self.isiterable:
             return Result.ResultIterator(self.data)
         else:
-            raise TypeError('result is not iterable')
+            raise TypeError("result is not iterable")
+
 
 class Endpoint(object):
-
     def __init__(self, ct, url, valid_params=None):
         self.ct = ct
         self.url = url
@@ -253,17 +257,14 @@ class Endpoint(object):
         self.path = []
 
     def resolve(self, *resolvers):
-        self.resolver = Resolver(
-            self.ct,
-            *resolvers
-        )
+        self.resolver = Resolver(self.ct, *resolvers)
 
         return self
 
     def params(self, **params):
         invalid_params = set(params.keys()) - self.valid_params
         if invalid_params:
-            raise ValueError(f'invalid params: {invalid_params}')
+            raise ValueError(f"invalid params: {invalid_params}")
 
         self.parameters = dict(params)
 
@@ -275,9 +276,7 @@ class Endpoint(object):
 
     def execute(self):
         result, status, reason = self.ct.connection.get(
-            self.url,
-            *self.path,
-            **self.parameters
+            self.url, *self.path, **self.parameters
         )
 
         result = Result(result, status, reason)
@@ -296,14 +295,13 @@ class Endpoint(object):
     def scroll(self, *path, **params):
         raise TypeError("endpoint is not scrollable")
 
-class ScrollableEndpoint(Endpoint):
 
+class ScrollableEndpoint(Endpoint):
     def scroll(self, **params):
         for d in self.ct.connection.scroll(self.url, *self.path, **self.parameters):
             if self.resolver:
                 self.resolver.resolve_all(self.ct, d)
             yield d
-
 
 
 ##############################################################################
@@ -323,43 +321,30 @@ class AllocationsEndpoint(ScrollableEndpoint):
                 "JobIsActive",
                 "UserIsActive",
                 "limit",
-                "offset"
-            )
+                "offset",
+            ),
         )
+
 
 class CustomFieldsEndpoint(ScrollableEndpoint):
     def __init__(self, ct, base_url):
-        super().__init__(
-            ct,
-            f"{base_url}/CustomFieldDefinitions",
-            (
-                "limit",
-                "offset"
-            )
-        )
+        super().__init__(ct, f"{base_url}/CustomFieldDefinitions", ("limit", "offset"))
 
     def params(self, **params):
         customFieldDefinitionID = params.pop("customFieldDefinitionID", None)
         if customFieldDefinitionID is not None:
-            self.path = [ customFieldDefinitionID ]
+            self.path = [customFieldDefinitionID]
         else:
             self.path = []
         return super().params(**params)
+
 
 class ClientEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
         super().__init__(
             ct,
             "Clients",
-            (
-                "ID",
-                "IsActive",
-                "Name",
-                "ShortName",
-                "ClientNumber",
-                "limit",
-                "offset"
-            )
+            ("ID", "IsActive", "Name", "ShortName", "ClientNumber", "limit", "offset"),
         )
 
     def custom_fields(self):
@@ -368,46 +353,33 @@ class ClientEndpoint(ScrollableEndpoint):
     def params(self, **params):
         clientID = params.pop("clientID", None)
         if clientID is not None:
-            self.path = [ clientID ]
+            self.path = [clientID]
         else:
             self.path = []
         return super().params(**params)
 
+
 class CompanyEndpoint(Endpoint):
     def __init__(self, ct):
-        super().__init__(
-            ct,
-            "Company",
-        )
+        super().__init__(ct, "Company")
+
 
 class CustomMessagesEndpoint(Endpoint):
     def __init__(self, ct):
-        super().__init__(
-            ct,
-            "CustomMessages",
-        )
+        super().__init__(ct, "CustomMessages")
 
     def params(self, **params):
         customMessageID = params.pop("customMessageID", None)
         if customMessageID is not None:
-            self.path = [ customMessageID ]
+            self.path = [customMessageID]
         else:
             self.path = []
         return super().params(**params)
 
+
 class DivisionsEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
-        super().__init__(
-            ct,
-            "Divisions",
-            (
-                "ID",
-                "IsActive",
-                "Name",
-                "limit",
-                "offset"
-            )
-        )
+        super().__init__(ct, "Divisions", ("ID", "IsActive", "Name", "limit", "offset"))
 
     def custom_fields(self):
         return CustomFieldsEndpoint(self.ct, "Divisions")
@@ -415,10 +387,11 @@ class DivisionsEndpoint(ScrollableEndpoint):
     def params(self, **params):
         clientID = params.pop("divisionID", None)
         if clientID is not None:
-            self.path = [ clientID ]
+            self.path = [clientID]
         else:
             self.path = []
         return super().params(**params)
+
 
 class ReportsEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
@@ -439,9 +412,10 @@ class ReportsEndpoint(ScrollableEndpoint):
                 "IsBillable",
                 "limit",
                 "offset",
-                "verbose"
-            )
+                "verbose",
+            ),
         )
+
 
 class JobsEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
@@ -456,25 +430,19 @@ class JobsEndpoint(ScrollableEndpoint):
                 "IsActive",
                 "ProjectManagerID",
                 "limit",
-                "offset"
-            )
+                "offset",
+            ),
         )
+
 
 class TimeEntriesEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
         super().__init__(
             ct,
             "TimeEntries",
-            (
-                "JobID",
-                "UserID",
-                "TaskID",
-                "StartDate",
-                "EndDate",
-                "limit",
-                "offset"
-            )
+            ("JobID", "UserID", "TaskID", "StartDate", "EndDate", "limit", "offset"),
         )
+
 
 class UsersEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
@@ -494,8 +462,8 @@ class UsersEndpoint(ScrollableEndpoint):
                 "SecurityLevel",
                 "ManagerPermission",
                 "limit",
-                "offset"
-            )
+                "offset",
+            ),
         )
 
     def custom_fields(self):
@@ -504,10 +472,11 @@ class UsersEndpoint(ScrollableEndpoint):
     def params(self, **params):
         userID = params.pop("userID", None)
         if userID is not None:
-            self.path = [ userID ]
+            self.path = [userID]
         else:
             self.path = []
         return super().params(**params)
+
 
 class TimeOffEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
@@ -522,8 +491,8 @@ class TimeOffEndpoint(ScrollableEndpoint):
                 "ToDate",
                 "Date",
                 "limit",
-                "offset"
-            )
+                "offset",
+            ),
         )
 
     def custom_fields(self):
@@ -532,14 +501,16 @@ class TimeOffEndpoint(ScrollableEndpoint):
     def params(self, **params):
         timeOffID = params.pop("timeOffID", None)
         if timeOffID is not None:
-            self.path = [ timeOffID ]
+            self.path = [timeOffID]
         else:
             self.path = []
         return super().params(**params)
 
+
 ##############################################################################
 # ClickTime
 ##############################################################################
+
 
 class ClickTime(object):
     """
@@ -570,11 +541,7 @@ class ClickTime(object):
 
     @property
     def connection(self):
-        return Connection(
-            self.username,
-            self.password,
-            self.token
-        )
+        return Connection(self.username, self.password, self.token)
 
     def allocations(self):
         return AllocationsEndpoint(self)
@@ -609,6 +576,7 @@ class ClickTime(object):
     def timeoff(self):
         return TimeOffEndpoint(self)
 
+
 ##############################################################################
 if __name__ == "__main__":
     """
@@ -618,13 +586,14 @@ if __name__ == "__main__":
     from pprint import pprint
     import logging
     import os
+
     try:
         import elasticsearch
     except ImportError:
         pass
 
     logging.basicConfig()
-    
+
     parser = OptionParser()
     parser.add_option("-u", "--username")
     parser.add_option("-p", "--password")
@@ -632,9 +601,9 @@ if __name__ == "__main__":
     parser.add_option("--debug", action="store_true", default=False)
     parser.add_option("--scroll", action="store_true", default=False)
     parser.add_option("--resolve", action="append", default=[], dest="resolvers")
-    parser.add_option("--param", action="append", default=[], dest="params")    
+    parser.add_option("--param", action="append", default=[], dest="params")
     opts, args = parser.parse_args()
-    
+
     # If we are debugging, turn extra debugging on
     if opts.debug:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -644,14 +613,14 @@ if __name__ == "__main__":
         if os.path.exists(".token"):
             with open(".token") as f:
                 opts.token = f.read().strip()
-    
+
     # Create the API class
     ct = ClickTime(opts.username, opts.password, opts.token)
 
     # See what Endpoint the user wants to calls
     if args:
         actions = args[0].lower().split(".")
-        params = dict([ p.split("=") for p in opts.params])
+        params = dict([p.split("=") for p in opts.params])
 
         endpoint = ct
         for action in actions:
