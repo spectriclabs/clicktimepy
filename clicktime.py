@@ -506,6 +506,42 @@ class TimeOffEndpoint(ScrollableEndpoint):
             self.path = []
         return super().params(**params)
 
+class ExpenseSheetEndpoint(ScrollableEndpoint):
+    def __init__(self, ct):
+        super().__init__(
+            ct,
+            "ExpenseSheets",
+            (
+                "ID",
+                "FromExpenseSheetDate",
+                "ToExpenseSheetDate",
+                "Status",
+                "Paid",
+                "ExpenseApproverID",
+                "UserID",
+                "UserIsActive",
+                "DivisionID",
+                "EmploymentTypeID",
+                "ExpenseDate",
+                "SortBy",
+            ),
+        )
+
+class ExpenseItemsEndpoint(ScrollableEndpoint):
+    def __init__(self, ct):
+        super().__init__(
+            ct,
+            "ExpenseItems",
+            (
+                "ID",
+                "ExpenseDate",
+                "ExpenseSheetID",
+                "ExpenseTypeID",
+                "JobID",
+                "UserID",
+                "SortBy"
+            ),
+        )
 
 ##############################################################################
 # ClickTime
