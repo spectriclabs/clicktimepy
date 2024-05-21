@@ -191,8 +191,27 @@ class Resolver(object):
     def resolve_all(self, ct, d):
         for resolver in self.resolvers:
             self._resolve(ct, resolver, d)
+            
+    def _prefetch(self, ct, resolver):
+        resolver_fields = tuple(resolver.split("."))
+        endpoint = resolver_fields[-1][0:-2]
+        keys = resolver_fields[0:-1] + (endpoint,)
 
-
+        callable_endpoint = getattr(ct, f'{endpoint.lower()}s', None)
+        if not callable(callable_endpoint):
+            # Cannot find endpoint for pre-fetch
+            logging.warning("Cannot prefetch %s", endpoint)
+            return
+        
+        for vv in callable_endpoint().scroll():
+            identifier = self.nested_get(vv, 'ID')
+            cache_key = (keys, identifier)
+            self.cache[cache_key] = vv
+    
+    def prefetch(self):
+        for resolver in self.resolvers:
+            self._prefetch(self.ct, resolver)
+            
 ##############################################################################
 
 
