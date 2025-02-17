@@ -25,7 +25,7 @@ import datetime
 import urllib.parse
 import logging
 import contextlib
-
+import requests
 
 class Connection(object):
     """
@@ -322,7 +322,6 @@ class ScrollableEndpoint(Endpoint):
                 self.resolver.resolve_all(self.ct, d)
             yield d
 
-
 ##############################################################################
 # Endpoints
 ##############################################################################
@@ -496,6 +495,23 @@ class UsersEndpoint(ScrollableEndpoint):
             self.path = []
         return super().params(**params)
 
+    def timeOffTypes(self, userID, timeOffTypeID=None):
+        if timeOffTypeID is None:
+            result = self.ct.connection.get(f"Users/{userID}/TimeOffTypes")
+        else:
+            result = self.ct.connection.get(f"Users/{userID}/TimeOffTypes/{timeOffTypeID}")
+            
+        if result[1] != 200:
+            raise RuntimeError
+        
+        if self.resolver:
+            if isinstance(result[0]['data'], list):
+                for d in result:
+                    self.resolver.resolve_all(self.ct, d)
+            else:
+                self.resolver.resolve_all(self.ct, result[0]['data'])
+                
+        return result[0]['data']
 
 class TimeOffEndpoint(ScrollableEndpoint):
     def __init__(self, ct):
@@ -561,6 +577,229 @@ class ExpenseItemsEndpoint(ScrollableEndpoint):
                 "SortBy"
             ),
         )
+
+class TimeOffEndpoint(ScrollableEndpoint):
+    def __init__(self, ct):
+        super().__init__(
+            ct,
+            "TimeOff",
+            ("ID", "UserID", "TimeOffTypeID", "FromDate", "ToDate", "Date", "limit", "offset"),
+        )
+
+class TimeOffTypesEndpoint(ScrollableEndpoint):
+    def __init__(self, ct):
+        super().__init__(
+            ct,
+            "TimeOffTypes",
+            ("ID","IsActive", "RequiresApproval", "Name", "DefaultApproverID", "limit", "offset"),
+        )
+
+class UserWorkTypeBalanceHistoryWithPayrollTime(Endpoint):
+    pass
+
+class WebSession():
+    login_url = 'https://app.clicktime.com/Login/'
+
+    def __init__(self , username, password):
+        # Create a session to persist cookies across requests
+        self.session = requests.Session()
+
+        payload = {
+            'username': username,
+            'password': password,
+            'provider': 'EmailPass',
+            'SSLstatus': 'on'
+        }
+
+        response = self.session.post(WebSession.login_url, data=payload)
+
+        if response.status_code != 200:
+            raise RuntimeError
+        
+class ListView():
+    
+    web_url = "https://app.clicktime.com/App/"
+    svc_path = "ListView/ListViewService.asmx/"
+
+    columns = dict(
+        PERSON = [
+                "2-psJIfcwbMY", # Name
+                "24uJJ2DoKtK0",
+                "284Ri4fKHoMo",
+                "2Bz2YU9H4DXA",
+                "2CHK85057icc",
+                "2EKI-5WyMpXQ",
+                "2EMfL7A_pJi4",
+                "2FBsWyHL46n4",
+                "2FH6N7-ZL6zI",
+                "2G1yR_AwyuY8",
+                "2GSSTvHpOT0E",
+                "2GhVd2qw9CGM",
+                "2J35huSXUVtU",
+                "2KvH3OFg5jyE",
+                "2fQa-o-al2Jo",
+                "2gVrDeJsbFXY",
+                "2kPC_THyPR4o",
+                "2kfZCtFD1ELY",
+                "2ole_yntoaAA",
+                "2vAPJ_Jfb1a8",
+                "2wSQA8eGTnFM",
+                "AccountingPackageID",
+                "Costs",
+                "DefaultTask",
+                "Division",
+                "EmailAddress",
+                "EmployeeNumber",
+                "EmployeePerformance",
+                "EmploymentType",
+                "EndDate",
+                "ExpenseSheetApprovedBy",
+                "FullName",
+                "IncompleteTimesheetRule",
+                "Notes",
+                "NotesRequired",
+                "PersonDetail",
+                "PreventIncompleteTimesheetSubmission",
+                "RequireStopwatch",
+                "Role",
+                "ScrambledUserID",
+                "Security",
+                "StartDate",
+                "StartEndTimeEntryRequired",
+                "Status",
+                "TimeOffApprovedBy",
+                "TimesheetApprovedBy"
+            ]
+        )
+
+    def __init__(self, session):
+        self.web = session
+
+    def get_list(self, listType, sort=None, start=0, limit=100):
+        headers = {
+            'Content-Type': 'application/json',  # Example if you're sending JSON data
+            'Accept': '*/*'
+        }
+
+        if listType not in ListView.columns:
+            raise ValueError("unsupported listType")
+        
+        payload = {
+            "start": start,
+            "limit": limit,
+            "listType":listType,
+            "activeOnly":False,
+            "inactiveOnly":False,
+            "neverSignedIn":False,
+            # it's not clear what this does, but if it is changed
+            # the response will fail
+            "columnIds": ListView.columns[listType],
+            "filter":""
+        }
+
+        if sort:
+            payload.update({
+                "dir": sort[0],
+                "sort":sort[1],
+            })
+
+        
+        protected_url = ListView.web_url + ListView.svc_path + "GetList"
+
+        protected_response = self.web.session.post(
+            protected_url,
+            headers=headers,
+            json=payload
+        )
+
+        result = json.loads(protected_response.text)
+        if result.get('d'):
+            return result['d']['totalCount'], result['d']['rows']
+        else:
+            raise RuntimeError(result)
+
+class LeaveType():
+    web_url = "https://app.clicktime.com/App/"
+    svc_path = "LeaveTypeControls/LeaveTypeService.asmx/"
+
+    def __init__(self, session):
+        self.web = session
+
+    def list(self, targetUserId):
+        headers = {
+            'Content-Type': 'application/json',  # Example if you're sending JSON data
+            'Accept': '*/*'
+        }
+
+        payload = {
+            "scrUserID": targetUserId, # the typo 'scr' vs 'src' is actually required by the API
+            "sortBy": "",
+            "activeOnly": True,
+            "offTimeOnly": True,
+            "includeRequiredApproval": True,
+            "workTypeIDs": ""
+        }
+
+        protected_url = LeaveType.web_url + LeaveType.svc_path + "ListUserWorkTypeBalance"
+
+        response = self.web.session.post(
+            protected_url,
+            headers=headers,
+            json=payload
+        )
+
+        result = json.loads(response.text)
+        if result.get('d'):                
+            return result['d']
+        else:
+            return None
+             
+class UpdateUserWorkTypeBalanceHistory():
+    web_url = "https://app.clicktime.com/App/"
+    svc_path = "Details/WorkType/WorkTypeService.asmx/"
+
+    def __init__(self, session):
+        self.web = session
+
+    def adjust(self, changeType, targetUserId, timeOffType, value, date, note=""):
+        headers = {
+            'Content-Type': 'application/json',  # Example if you're sending JSON data
+            'Accept': '*/*'
+        }
+
+        if isinstance(date, datetime.datetime):
+            date = date.strftime("%m/%d/%Y")
+
+        payload = {
+            "targetUserID": targetUserId,
+            "userWorkTypeBalanceID": timeOffType,
+            "changeType": changeType, #3=Add, 4=Subtract, 5=Set
+            "value": str(value),
+            "date": date,
+            "note": note
+        }
+
+        protected_url = UpdateUserWorkTypeBalanceHistory.web_url + UpdateUserWorkTypeBalanceHistory.svc_path + "UpdateUserWorkTypeBalanceHistory"
+
+        response = self.web.session.post(
+            protected_url,
+            headers=headers,
+            json=payload
+        )
+
+        result = json.loads(response.text)
+        
+        return result
+
+
+    def add(self, targetUserId, timeOffType, value, date, note=""):
+        return self.adjust(3, targetUserId, timeOffType, value, date, note)
+
+    def sub(self, targetUserId, timeOffType, value, date, note=""):
+        return self.adjust(4, targetUserId, timeOffType, value, date, note)
+
+    def set(self, targetUserId, timeOffType, value, date, note=""):
+        return self.adjust(5, targetUserId, timeOffType, value, date, note)
 
 ##############################################################################
 # ClickTime
